@@ -1,41 +1,103 @@
-var createError = require("http-errors");
-var express = require("express");
-var path = require("path");
-var cookieParser = require("cookie-parser");
-var logger = require("morgan");
+const express = require("express");
+const path = require("path");
+const logger = require("morgan");
+const cookieParser = require("cookie-parser");
+const bodyParser = require("body-parser");
+const mongoose = require("mongoose");
+const routeManager = require("./routes");
 
-var indexRouter = require("./routes/index");
-var usersRouter = require("./routes/users");
+mongoose.Promise = global.Promise;
 
-var app = express();
+require("dotenv").config({ path: "variables.env" });
+
+//mongoose.connect(process.env.DEV_DB,options);
+mongoose
+  .connect(process.env.DATABASE)
+  .then(result => {
+    console.log(
+      `connection successfully to database ${process.env.DATABASENAME}`
+    );
+  })
+  .catch(err => {
+    console.log("ERROR:", err.message);
+  });
+// mongoose.connection.on('error', (err) => {
+//   console.log('ERROR:',err.message);
+// });
+
+const app = express();
 
 // view engine setup
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "ejs");
 
-app.use(logger("dev"));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(logger("dev"));
+
 app.use(express.static(path.join(__dirname, "public")));
 
-app.use("/", indexRouter);
-app.use("/users", usersRouter);
+const UserRouter = require("./routes//users");
 
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
+app.use("/", routeManager);
+app.use("/api/v1/users", UserRouter);
+
+// Add headers
+app.use(function (req, res, next) {
+  // Website you wish to allow to connect
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
+  // Request methods you wish to allow
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET, POST, OPTIONS, PUT, PATCH, DELETE"
+  );
+
+  // Request headers you wish to allow
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "X-Requested-With,content-type,authorization"
+  );
+  next();
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get("env") === "development" ? err : {};
+/// catch 404 and forwarding to error handler
+app.use(function (req, res, next) {
+  var err = new Error("Not Found");
+  err.status = 404;
+  next(err);
+});
 
-  // render the error page
+/// error handlers
+
+// development error handler
+// will print stacktrace
+if (app.get("env") === "development") {
+  app.use(function (err, req, res, next) {
+    res.status(err.status || 500);
+    res.json({
+      message: err.message,
+      success: false,
+      data: err.data,
+      error: err
+    });
+  });
+}
+
+// production error handler
+// no stacktraces leaked to user
+app.use(function (err, req, res, next) {
   res.status(err.status || 500);
-  res.render("error");
+  res.json({
+    message: err.message,
+    success: false,
+    data: err.data,
+    error: {}
+  });
 });
 
-module.exports = app;
+//Start server
+app.listen(process.env.PORT, function () {
+  console.log("Server is running at port:" + process.env.PORT);
+});
